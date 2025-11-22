@@ -1,6 +1,6 @@
 console.clear();
 
-figma.showUI(__html__, { width: 600, height: 800 });
+figma.showUI(__html__, { width: 600, height: 600 });
 
 // --- Types ---
 
@@ -595,9 +595,24 @@ async function handleImport(data: JSONRoot) {
               } else {
                 log('WARN', `Alias target variable not found: "${targetVariableName}" (Collection: "${targetCollectionName}")`);
               }
-            } else if (valueToSet !== undefined) {
-              // Primitive Value Parsing
+            } else {
+              // Handle different value formats
+              // Full Spec: Parse structured values
+              if (typeof valueToSet === 'object' && valueToSet !== null) {
+                // Color with colorSpace and components
+                if ('colorSpace' in valueToSet && 'components' in valueToSet && Array.isArray(valueToSet.components)) {
+                  // Convert from components [r, g, b] (0-1 range) to RGB object
+                  const [r, g, b] = valueToSet.components;
+                  valueToSet = { r, g, b, a: 1 };
+                }
+                // Dimension with value and unit
+                else if ('value' in valueToSet && 'unit' in valueToSet) {
+                  // Extract just the numeric value (Figma stores dimensions as numbers)
+                  valueToSet = valueToSet.value;
+                }
+              }
               
+              // Type conversions
               // COLOR
               if (variable.resolvedType === 'COLOR' && typeof valueToSet === 'string' && valueToSet.startsWith('#')) {
                   valueToSet = figma.util.rgb(valueToSet);
