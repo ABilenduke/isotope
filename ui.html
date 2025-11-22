@@ -1,0 +1,153 @@
+<style>
+  body {
+    font-family: sans-serif;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  button {
+    padding: 8px 16px;
+    background-color: #18a0fb;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  button:hover {
+    background-color: #0d86d8;
+  }
+  button.secondary {
+    background-color: transparent;
+    border: 1px solid #e5e5e5;
+    color: #333;
+  }
+  button.secondary:hover {
+    border-color: #333;
+  }
+  .row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  #status {
+    font-size: 12px;
+    color: #666;
+    margin-top: 8px;
+  }
+  #logs {
+    margin-top: 12px;
+    padding: 8px;
+    background: #F5F5F5;
+    border: 1px solid #E5E5E5;
+    border-radius: 4px;
+    height: 150px;
+    overflow-y: auto;
+    font-family: monospace;
+    font-size: 11px;
+    white-space: pre-wrap;
+  }
+  .log-info { color: #333; }
+  .log-warn { color: #D97706; }
+  .log-error { color: #DC2626; }
+  input[type="file"] {
+    display: none;
+  }
+</style>
+
+<h2>Variable Manager</h2>
+
+<div class="row">
+  <button id="export">Export Variables to JSON</button>
+</div>
+
+<div class="row">
+  <button id="importBtn" class="secondary">Import Variables from JSON</button>
+  <input type="file" id="fileInput" accept=".json" />
+</div>
+
+<div id="status"></div>
+<div id="logs"></div>
+
+<script>
+  const statusDiv = document.getElementById("status");
+  const logsDiv = document.getElementById('logs');
+
+  function setStatus(msg) {
+    statusDiv.textContent = msg;
+  }
+
+  function addLog(type, message) {
+    const entry = document.createElement('div');
+    entry.className = `log-${type.toLowerCase()}`;
+    entry.textContent = `[${type}] ${message}`;
+    logsDiv.appendChild(entry);
+    logsDiv.scrollTop = logsDiv.scrollHeight;
+  }
+
+  // Export
+  document.getElementById("export").onclick = () => {
+    setStatus("Exporting...");
+    logsDiv.innerHTML = ''; // Clear logs
+    parent.postMessage({ pluginMessage: { type: "export-variables" } }, "*");
+  };
+
+  // Import Trigger
+  document.getElementById("importBtn").onclick = () => {
+    document.getElementById("fileInput").click();
+  };
+
+  // File Selection
+  document.getElementById("fileInput").onchange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const json = JSON.parse(event.target.result);
+        setStatus("Importing...");
+        logsDiv.innerHTML = ''; // Clear logs
+        parent.postMessage(
+          { pluginMessage: { type: "import-variables", data: json } },
+          "*"
+        );
+      } catch (err) {
+        setStatus("Error parsing JSON");
+        addLog('ERROR', 'Failed to parse JSON file: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  // Handle messages from the plugin code
+  window.onmessage = (event) => {
+    const msg = event.data.pluginMessage;
+    if (msg.type === "export-success") {
+      downloadJSON(msg.data, "figma-variables.json");
+      setStatus("Export complete!");
+      addLog('INFO', 'Export completed successfully.');
+    } else if (msg.type === "import-success") {
+      setStatus("Import complete!");
+      addLog('INFO', 'Import completed successfully.');
+    } else if (msg.type === "error") {
+      setStatus("Error occurred");
+      addLog('ERROR', msg.message);
+    } else if (msg.type === 'log') {
+      addLog(msg.level, msg.message);
+    }
+  };
+
+  function downloadJSON(data, filename) {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+</script>
