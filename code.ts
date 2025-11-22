@@ -1,6 +1,6 @@
 console.clear();
 
-figma.showUI(__html__, { width: 400, height: 350 });
+figma.showUI(__html__, { width: 600, height: 600 });
 
 // --- Types ---
 
@@ -131,27 +131,55 @@ async function handleExport() {
 
         for (const variable of collectionVariables) {
           const value = variable.valuesByMode[mode.modeId];
+          
+          // Map Figma type to JSON type (lowercase)
+          let jsonType = variable.resolvedType.toLowerCase();
+          if (jsonType === 'float') jsonType = 'number';
+
           const exportValue: JSONVariableValue = {
-            type: variable.resolvedType,
+            type: jsonType as any, // Cast to allow string
             description: variable.description,
           };
 
           // Check for Alias
           if (typeof value === 'object' && value !== null && 'type' in value && (value as VariableAlias).type === 'VARIABLE_ALIAS') {
-            exportValue.type = 'VARIABLE_ALIAS';
             const aliasId = (value as VariableAlias).id;
             const targetVariable = await figma.variables.getVariableByIdAsync(aliasId);
+            
             if (targetVariable) {
               const targetCollection = await figma.variables.getVariableCollectionByIdAsync(targetVariable.variableCollectionId);
-              exportValue.targetCollection = targetCollection?.name || 'Unknown';
-              exportValue.targetVariable = targetVariable.name;
+              const collectionName = targetCollection?.name || 'Unknown';
+              // Construct string alias: {Collection.Path.To.Variable}
+              // Replace slashes with dots for the path
+              const varPath = targetVariable.name.replace(/\//g, '.');
+              exportValue.value = `{${collectionName}.${varPath}}`;
+              
+              // For aliases, we keep the resolved type of the variable (e.g. "color")
+              // so the import knows what it is.
             } else {
               exportValue.value = "BROKEN_ALIAS";
               log('WARN', `Broken alias found for variable "${variable.name}" in mode "${mode.name}"`);
             }
           } else {
             // Primitive Value
-            exportValue.value = value;
+            // Convert RGB to Hex for colors
+            if (variable.resolvedType === 'COLOR' && typeof value === 'object' && 'r' in (value as any)) {
+                const r = Math.round((value as any).r * 255);
+                const g = Math.round((value as any).g * 255);
+                const b = Math.round((value as any).b * 255);
+                const a = (value as any).a;
+                
+                const hex = ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
+                if (a !== 1) {
+                    // Add alpha if needed, but standard hex is usually preferred
+                    // For now, let's stick to simple hex if alpha is 1
+                    exportValue.value = `#${hex}`; 
+                } else {
+                    exportValue.value = `#${hex}`;
+                }
+            } else {
+                exportValue.value = value;
+            }
           }
 
           // Reconstruct nested structure
@@ -161,10 +189,10 @@ async function handleExport() {
           for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
             if (i === parts.length - 1) {
-              // Leaf
+              // Leaf node
               currentLevel[part] = exportValue;
             } else {
-              // Group
+              // Group node
               if (!currentLevel[part]) {
                 currentLevel[part] = {};
               }
@@ -186,6 +214,9 @@ async function handleExport() {
 }
 
 // --- Import ---
+
+// Helper for chunking
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 async function handleImport(data: JSONRoot) {
   try {
@@ -238,9 +269,17 @@ async function handleImport(data: JSONRoot) {
 
         // We assume all modes have the same variables, so we pick the first mode to discover variables
         const firstModeName = Object.keys(modes)[0];
-        const variables = flattenVariables(modes[firstModeName]);
-
+        const variables = Array.from(flattenVariables(modes[firstModeName]));
+        
+        let processedCount = 0;
         for (const [varName, varData] of variables) {
+            // Chunking: Yield every 20 variables
+            if (processedCount % 20 === 0) {
+                figma.ui.postMessage({ type: 'progress', message: `Creating variables... (${processedCount}/${variables.length})` });
+                await delay(1);
+            }
+            processedCount++;
+
             const existingVars = await figma.variables.getLocalVariablesAsync();
             let variable = existingVars.find(v => v.name === varName && v.variableCollectionId === collection!.id);
             
@@ -279,9 +318,17 @@ async function handleImport(data: JSONRoot) {
         const modeId = modeMap?.get(modeName);
         if (!modeId) continue;
 
-        const flatVariables = flattenVariables(varGroups);
+        const variables = Array.from(flattenVariables(varGroups));
         
-        for (const [varName, varData] of flatVariables) {
+        let processedCount = 0;
+        for (const [varName, varData] of variables) {
+          // Chunking: Yield every 20 values
+          if (processedCount % 20 === 0) {
+             figma.ui.postMessage({ type: 'progress', message: `Setting values... (${processedCount}/${variables.length})` });
+             await delay(1);
+          }
+          processedCount++;
+
           const localVariables = await figma.variables.getLocalVariablesAsync();
           const variable = localVariables.find(v => v.name === varName && v.variableCollectionId === collection.id);
           
