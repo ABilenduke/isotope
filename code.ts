@@ -1,15 +1,15 @@
 console.clear();
 
-figma.showUI(__html__, { width: 600, height: 600 });
+figma.showUI(__html__, { width: 600, height: 800 });
 
 // --- Types ---
 
 interface JSONVariableValue {
-  type: VariableResolvedDataType | 'VARIABLE_ALIAS';
-  value?: any; // The raw value (e.g., RGBA object, number, string, boolean)
-  description?: string;
-  targetCollection?: string; // For aliases
-  targetVariable?: string;   // For aliases
+  $type: string;
+  $value?: any; // The raw value (e.g., RGBA object, number, string, boolean)
+  $description?: string;
+  targetCollection?: string; // For aliases (temporary, used during import)
+  targetVariable?: string;   // For aliases (temporary, used during import)
 }
 
 // Recursive type for nested groups
@@ -42,27 +42,41 @@ function mapJsonTypeToFigmaType(jsonType: string): VariableResolvedDataType {
   return 'STRING';
 }
 
-function flattenVariables(obj: any, prefix: string = ''): Map<string, JSONVariableValue> {
+function flattenVariables(obj: any, prefix: string = '', warnLegacy: { hasLegacy: boolean } = { hasLegacy: false }): Map<string, JSONVariableValue> {
   const result = new Map<string, JSONVariableValue>();
   
   for (const [key, value] of Object.entries(obj)) {
-    // Skip internal keys if any
-    if (key.startsWith('_')) continue;
+    // Skip internal keys (including DTCG $-prefixed metadata at group level)
+    if (key.startsWith('_') || key.startsWith('$')) continue;
 
     const newKey = prefix ? `${prefix}/${key}` : key;
     
     if (value && typeof value === 'object') {
       // Check if it's a leaf node (Variable)
-      // We check for 'type' and 'value' OR 'type' == 'VARIABLE_ALIAS'
-      const hasType = 'type' in value;
-      const hasValue = 'value' in value;
-      const isAlias = hasType && (value as any).type === 'VARIABLE_ALIAS';
+      // Support both DTCG format ($type, $value) and legacy format (type, value)
+      const hasDTCGType = '$type' in value;
+      const hasDTCGValue = '$value' in value;
+      const hasLegacyType = 'type' in value;
+      const hasLegacyValue = 'value' in value;
       
-      if ((hasType && hasValue) || isAlias) {
-        result.set(newKey, value as JSONVariableValue);
+      const isVariable = (hasDTCGType && hasDTCGValue) || (hasLegacyType && hasLegacyValue);
+      
+      if (isVariable) {
+        // Detect legacy format
+        if (!hasDTCGType && !hasDTCGValue && (hasLegacyType || hasLegacyValue)) {
+          warnLegacy.hasLegacy = true;
+        }
+        
+        // Normalize to DTCG format
+        const normalized: JSONVariableValue = {
+          $type: (value as any).$type || (value as any).type,
+          $value: (value as any).$value !== undefined ? (value as any).$value : (value as any).value,
+          $description: (value as any).$description || (value as any).description,
+        };
+        result.set(newKey, normalized);
       } else {
         // It's a group, recurse
-        const children = flattenVariables(value, newKey);
+        const children = flattenVariables(value, newKey, warnLegacy);
         for (const [childKey, childValue] of children) {
           result.set(childKey, childValue);
         }
@@ -77,7 +91,7 @@ function flattenVariables(obj: any, prefix: string = ''): Map<string, JSONVariab
 
 figma.ui.onmessage = async (msg) => {
   if (msg.type === 'export-variables') {
-    await handleExport();
+    await handleExport(msg.format || 'simplified');
   } else if (msg.type === 'import-variables') {
     await handleImport(msg.data);
   } else if (msg.type === 'delete-all') {
@@ -113,9 +127,63 @@ async function handleDeleteAll() {
 
 // --- Export ---
 
-async function handleExport() {
+// --- Export ---
+
+type ExportFormat = 'simplified' | 'fullspec' | 'css' | 'tailwind';
+
+// Helper function to convert Figma RGB to hex string
+function rgbToHex(r: number, g: number, b: number): string {
+  const rInt = Math.round(r * 255);
+  const gInt = Math.round(g * 255);
+  const bInt = Math.round(b * 255);
+  return ((1 << 24) + (rInt << 16) + (gInt << 8) + bInt).toString(16).slice(1).toUpperCase();
+}
+
+// Convert value based on format
+function convertValueForFormat(value: any, variable: Variable, format: ExportFormat): any {
+  // Handle aliases (same for all formats)
+  if (typeof value === 'object' && value !== null && 'type' in value && (value as VariableAlias).type === 'VARIABLE_ALIAS') {
+    return null; // Signal that this needs alias handling  
+  }
+
+  // Format-specific conversion
+  if (format === 'fullspec') {
+    // W3C DTCG Spec format
+    if (variable.resolvedType === 'COLOR' && typeof value === 'object' && 'r' in value) {
+      return {
+        colorSpace: 'srgb',
+        components: [value.r, value.g, value.b]
+      };
+    } else if (variable.resolvedType === 'FLOAT') {
+      return { value: value, unit: 'px' };
+    }
+    return value;
+  } else if (format === 'simplified') {
+    // Simplified format (current - hex colors, plain numbers)
+    if (variable.resolvedType === 'COLOR' && typeof value === 'object' && 'r' in value) {
+      return `#${rgbToHex(value.r, value.g, value.b)}`;
+    }
+    return value;
+  } else {
+    // CSS format - handled separately
+    return value;
+  }
+}
+
+async function handleExport(format: ExportFormat = 'simplified') {
   try {
-    log('INFO', 'Starting export...');
+    log('INFO', `Starting export in ${format} format...`);
+    
+    if (format === 'css') {
+      await exportAsCSS();
+      return;
+    }
+    
+    if (format === 'tailwind') {
+      await exportAsTailwind();
+      return;
+    }
+
     const result: JSONRoot = {};
     const collections = await figma.variables.getLocalVariableCollectionsAsync();
     const variables = await figma.variables.getLocalVariablesAsync();
@@ -132,54 +200,36 @@ async function handleExport() {
         for (const variable of collectionVariables) {
           const value = variable.valuesByMode[mode.modeId];
           
-          // Map Figma type to JSON type (lowercase)
+          // Map Figma type to JSON type
           let jsonType = variable.resolvedType.toLowerCase();
-          if (jsonType === 'float') jsonType = 'number';
+          if (jsonType === 'float') {
+            jsonType = format === 'fullspec' ? 'dimension' : 'number';
+          }
 
           const exportValue: JSONVariableValue = {
-            type: jsonType as any, // Cast to allow string
-            description: variable.description,
+            $type: jsonType,
+            $description: variable.description,
           };
 
           // Check for Alias
-          if (typeof value === 'object' && value !== null && 'type' in value && (value as VariableAlias).type === 'VARIABLE_ALIAS') {
+          const convertedValue = convertValueForFormat(value, variable, format);
+          
+          if (convertedValue === null) {
+            // It's an alias
             const aliasId = (value as VariableAlias).id;
             const targetVariable = await figma.variables.getVariableByIdAsync(aliasId);
             
             if (targetVariable) {
               const targetCollection = await figma.variables.getVariableCollectionByIdAsync(targetVariable.variableCollectionId);
               const collectionName = targetCollection?.name || 'Unknown';
-              // Construct string alias: {Collection.Path.To.Variable}
-              // Replace slashes with dots for the path
               const varPath = targetVariable.name.replace(/\//g, '.');
-              exportValue.value = `{${collectionName}.${varPath}}`;
-              
-              // For aliases, we keep the resolved type of the variable (e.g. "color")
-              // so the import knows what it is.
+              exportValue.$value = `{${collectionName}.${varPath}}`;
             } else {
-              exportValue.value = "BROKEN_ALIAS";
+              exportValue.$value = "BROKEN_ALIAS";
               log('WARN', `Broken alias found for variable "${variable.name}" in mode "${mode.name}"`);
             }
           } else {
-            // Primitive Value
-            // Convert RGB to Hex for colors
-            if (variable.resolvedType === 'COLOR' && typeof value === 'object' && 'r' in (value as any)) {
-                const r = Math.round((value as any).r * 255);
-                const g = Math.round((value as any).g * 255);
-                const b = Math.round((value as any).b * 255);
-                const a = (value as any).a;
-                
-                const hex = ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).toUpperCase();
-                if (a !== 1) {
-                    // Add alpha if needed, but standard hex is usually preferred
-                    // For now, let's stick to simple hex if alpha is 1
-                    exportValue.value = `#${hex}`; 
-                } else {
-                    exportValue.value = `#${hex}`;
-                }
-            } else {
-                exportValue.value = value;
-            }
+            exportValue.$value = convertedValue;
           }
 
           // Reconstruct nested structure
@@ -196,8 +246,6 @@ async function handleExport() {
               if (!currentLevel[part]) {
                 currentLevel[part] = {};
               }
-              // We need to cast because TS doesn't know if it's a Group or VariableValue yet
-              // But we know we just created it as {} or it was already a group
               currentLevel = currentLevel[part] as JSONGroup;
             }
           }
@@ -206,7 +254,173 @@ async function handleExport() {
     }
 
     log('INFO', `Exported ${collections.length} collections.`);
-    figma.ui.postMessage({ type: 'export-success', data: result });
+    figma.ui.postMessage({ type: 'export-success', data: result, format });
+  } catch (err) {
+    log('ERROR', String(err));
+    figma.ui.postMessage({ type: 'error', message: String(err) });
+  }
+}
+
+async function exportAsCSS() {
+  try {
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const variables = await figma.variables.getLocalVariablesAsync();
+    
+    let css = '/* Design Tokens - CSS Variables */\n\n';
+
+    for (const collection of collections) {
+      const collectionVariables = variables.filter(v => v.variableCollectionId === collection.id);
+      
+      for (const mode of collection.modes) {
+        css += `/* ${collection.name} - ${mode.name} */\n`;
+        css += `:root {\n`;
+
+        for (const variable of collectionVariables) {
+          const value = variable.valuesByMode[mode.modeId];
+          const varName = `--${collection.name}-${mode.name}-${variable.name}`.replace(/[/\s]/g, '-').toLowerCase();
+          
+          let cssValue: string;
+          
+          // Handle different types
+          if (typeof value === 'object' && value !== null && 'type' in value && (value as VariableAlias).type === 'VARIABLE_ALIAS') {
+            // Alias - reference another CSS variable
+            const aliasId = (value as VariableAlias).id;
+            const targetVariable = await figma.variables.getVariableByIdAsync(aliasId);
+            if (targetVariable) {
+              const targetCollection = await figma.variables.getVariableCollectionByIdAsync(targetVariable.variableCollectionId);
+              const targetCollectionName = targetCollection?.name || 'unknown';
+              const targetModeName = mode.name; // Assuming same mode
+              const refVarName = `--${targetCollectionName}-${targetModeName}-${targetVariable.name}`.replace(/[/\s]/g, '-').toLowerCase();
+              cssValue = `var(${refVarName})`;
+            } else {
+              cssValue = '/* BROKEN ALIAS */';
+            }
+          } else if (variable.resolvedType === 'COLOR' && typeof value === 'object' && value !== null && 'r' in value) {
+            const rgb = value as RGB;  
+            cssValue = `#${rgbToHex(rgb.r, rgb.g, rgb.b)}`;
+          } else if (typeof value === 'number') {
+            cssValue = String(value);
+          } else if (typeof value === 'string') {
+            cssValue = `"${value}"`;
+          } else {
+            cssValue = String(value);
+          }
+          
+          css += `  ${varName}: ${cssValue};\n`;
+        }
+        
+        css += `}\n\n`;
+      }
+    }
+
+    log('INFO', `Exported ${collections.length} collections as CSS.`);
+    figma.ui.postMessage({ type: 'export-success-css', data: css });
+  } catch (err) {
+    log('ERROR', String(err));
+    figma.ui.postMessage({ type: 'error', message: String(err) });
+  }
+}
+
+async function exportAsTailwind() {
+  try {
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    const variables = await figma.variables.getLocalVariablesAsync();
+    
+    // Tailwind config structure
+    const themeConfig: any = {
+      colors: {},
+      spacing: {},
+      fontSize: {},
+      fontFamily: {},
+      fontWeight: {},
+      lineHeight: {},
+      borderRadius: {},
+      boxShadow: {},
+      opacity: {},
+      zIndex: {},
+    };
+
+    for (const collection of collections) {
+      const collectionVariables = variables.filter(v => v.variableCollectionId === collection.id);
+      
+      // Use first mode for Tailwind (Tailwind doesn't support modes natively)
+      const mode = collection.modes[0];
+      if (!mode) continue;
+
+      for (const variable of collectionVariables) {
+        const value = variable.valuesByMode[mode.modeId];
+        
+        // Convert variable name to Tailwind-friendly key
+        // e.g. "color/primary/500" -> "primary-500"
+        const nameParts = variable.name.split('/');
+        const tailwindKey = nameParts.join('-').toLowerCase();
+        
+        // Determine which Tailwind theme key to use based on type
+        if (variable.resolvedType === 'COLOR') {
+          // Handle aliases
+          if (typeof value === 'object' && value !== null && 'type' in value && (value as VariableAlias).type === 'VARIABLE_ALIAS') {
+            const aliasId = (value as VariableAlias).id;
+            const targetVariable = await figma.variables.getVariableByIdAsync(aliasId);
+            if (targetVariable) {
+              const refKey = targetVariable.name.split('/').join('-').toLowerCase();
+              themeConfig.colors[tailwindKey] = `{colors.${refKey}}`;
+            }
+          } else if (typeof value === 'object' && 'r' in value) {
+            const rgb = value as RGB;
+            themeConfig.colors[tailwindKey] = `#${rgbToHex(rgb.r, rgb.g, rgb.b)}`;
+          }
+        } else if (variable.resolvedType === 'FLOAT') {
+          // Could be spacing, fontSize, borderRadius, etc.
+          // Try to infer from variable name
+          const lowerName = variable.name.toLowerCase();
+          
+          if (lowerName.includes('spacing') || lowerName.includes('space') || lowerName.includes('gap') || lowerName.includes('margin') || lowerName.includes('padding')) {
+            themeConfig.spacing[tailwindKey] = `${value}px`;
+          } else if (lowerName.includes('font') && lowerName.includes('size')) {
+            themeConfig.fontSize[tailwindKey] = `${value}px`;
+          } else if (lowerName.includes('radius') || lowerName.includes('rounded')) {
+            themeConfig.borderRadius[tailwindKey] = `${value}px`;
+          } else {
+            // Default to spacing
+            themeConfig.spacing[tailwindKey] = `${value}px`;
+          }
+        } else if (variable.resolvedType === 'STRING') {
+          const lowerName = variable.name.toLowerCase();
+          if (lowerName.includes('font') && (lowerName.includes('family') || lowerName.includes('face'))) {
+            themeConfig.fontFamily[tailwindKey] = typeof value === 'string' ? [value] : String(value);
+          } else if (lowerName.includes('shadow')) {
+            themeConfig.boxShadow[tailwindKey] = String(value);
+          }
+        }
+      }
+    }
+
+    // Clean up empty sections
+    Object.keys(themeConfig).forEach(key => {
+      if (Object.keys(themeConfig[key]).length === 0) {
+        delete themeConfig[key];
+      }
+    });
+
+    // Generate JavaScript config file (avoid import keyword detection by Figma bundler)
+    const typeComment = '/** @type {im' + 'port(\'tailwindcss\').Config} */';
+    let tailwindConfig = typeComment + '\n';
+    tailwindConfig += `module.exports = {\n`;
+    tailwindConfig += `  theme: {\n`;
+    tailwindConfig += `    extend: {\n`;
+    
+    // Add each theme section
+    for (const [section, values] of Object.entries(themeConfig)) {
+      tailwindConfig += `      ${section}: ${JSON.stringify(values, null, 8).replace(/^/gm, '      ').trim()},\n`;
+    }
+    
+    tailwindConfig += `    },\n`;
+    tailwindConfig += `  },\n`;
+    tailwindConfig += `  plugins: [],\n`;
+    tailwindConfig += `}\n`;
+
+    log('INFO', `Exported ${collections.length} collections as Tailwind config.`);
+    figma.ui.postMessage({ type: 'export-success-tailwind', data: tailwindConfig });
   } catch (err) {
     log('ERROR', String(err));
     figma.ui.postMessage({ type: 'error', message: String(err) });
@@ -221,6 +435,9 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 async function handleImport(data: JSONRoot) {
   try {
     log('INFO', 'Starting import...');
+    
+    // Track if we encountered legacy format
+    const legacyDetector = { hasLegacy: false };
     
     // Pass 1: Collections & Modes
     const collectionMap = new Map<string, VariableCollection>();
@@ -269,7 +486,7 @@ async function handleImport(data: JSONRoot) {
 
         // We assume all modes have the same variables, so we pick the first mode to discover variables
         const firstModeName = Object.keys(modes)[0];
-        const variables = Array.from(flattenVariables(modes[firstModeName]));
+        const variables = Array.from(flattenVariables(modes[firstModeName], '', legacyDetector));
         
         let processedCount = 0;
         for (const [varName, varData] of variables) {
@@ -285,17 +502,9 @@ async function handleImport(data: JSONRoot) {
             
             if (!variable) {
                 let type: VariableResolvedDataType = 'STRING';
-                if (varData.type === 'VARIABLE_ALIAS') {
-                     // Try to infer type from target... or default to STRING/COLOR if we can guess
-                     // For now, we default to STRING if unknown, but we can try to look ahead?
-                     // The mapJsonTypeToFigmaType helper handles this if we have a type.
-                     // If it's an alias, varData might NOT have a 'type' field in some JSON schemas, 
-                     // but in this user's file, aliases DO have "type": "color" etc.
-                     if ('type' in varData) {
-                         type = mapJsonTypeToFigmaType((varData as any).type);
-                     }
-                } else {
-                    type = mapJsonTypeToFigmaType(varData.type);
+                // Check if it has a $type specified
+                if (varData.$type) {
+                    type = mapJsonTypeToFigmaType(varData.$type);
                 }
                 
                 try {
@@ -318,7 +527,7 @@ async function handleImport(data: JSONRoot) {
         const modeId = modeMap?.get(modeName);
         if (!modeId) continue;
 
-        const variables = Array.from(flattenVariables(varGroups));
+        const variables = Array.from(flattenVariables(varGroups, '', legacyDetector));
         
         let processedCount = 0;
         for (const [varName, varData] of variables) {
@@ -335,13 +544,13 @@ async function handleImport(data: JSONRoot) {
           if (!variable) continue;
 
           try {
-            let valueToSet = varData.value;
+            let valueToSet = varData.$value;
             let isAlias = false;
             let targetCollectionName = '';
             let targetVariableName = '';
 
-            // Check for explicit Alias object
-            if (varData.type === 'VARIABLE_ALIAS' && varData.targetCollection && varData.targetVariable) {
+            // Check for explicit Alias object (legacy support)
+            if (varData.targetCollection && varData.targetVariable) {
               isAlias = true;
               targetCollectionName = varData.targetCollection;
               targetVariableName = varData.targetVariable;
@@ -413,6 +622,11 @@ async function handleImport(data: JSONRoot) {
           }
         }
       }
+    }
+
+    // Warn about legacy format if detected
+    if (legacyDetector.hasLegacy) {
+      log('WARN', 'Your JSON file uses legacy format (value/type). Please update to W3C DTCG format ($value/$type) for full compatibility.');
     }
 
     log('INFO', 'Import completed successfully.');

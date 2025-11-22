@@ -1,7 +1,7 @@
 {
-  "name": "variable-controller",
+  "name": "isotope",
   "version": "1.0.0",
-  "description": "Your Figma Plugin",
+  "description": "Isotope is a Figma plugin that allows you to export and import variables from Figma.",
   "main": "code.js",
   "scripts": {
     "build": "tsc -p tsconfig.json",
@@ -9,8 +9,8 @@
     "lint:fix": "eslint --ext .ts,.tsx --ignore-pattern node_modules --fix .",
     "watch": "npm run build -- --watch"
   },
-  "author": "",
-  "license": "",
+  "author": "Andrew Bilenduke",
+  "license": "MIT",
   "devDependencies": {
     "@figma/eslint-plugin-figma-plugins": "*",
     "@figma/plugin-typings": "^1.121.0",

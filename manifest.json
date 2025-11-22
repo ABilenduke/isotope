@@ -1,18 +1,20 @@
 {
-  "name": "Variable Import/Export",
+  "name": "Isotope",
   "id": "1573839979841238150",
   "api": "1.0.0",
   "main": "code.js",
+  "ui": "ui.html",
   "capabilities": [],
   "enableProposedApi": false,
   "documentAccess": "dynamic-page",
   "editorType": [
-    "figma"
+    "figma",
+    "dev"
   ],
-  "ui": "ui.html",
   "networkAccess": {
     "allowedDomains": [
       "none"
-    ]
+    ],
+    "reasoning": "This plugin runs locally to export variables and does not require external network access."
   }
 }
