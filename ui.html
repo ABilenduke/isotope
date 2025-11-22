@@ -1,78 +1,259 @@
 <style>
+  :root {
+    /* Light Mode Tokens */
+    --md-sys-color-primary: #0061A4;
+    --md-sys-color-on-primary: #FFFFFF;
+    --md-sys-color-primary-container: #D1E4FF;
+    --md-sys-color-on-primary-container: #001D36;
+    --md-sys-color-secondary: #535F70;
+    --md-sys-color-secondary-container: #D7E3F7;
+    --md-sys-color-on-secondary-container: #101C2B;
+    --md-sys-color-error: #BA1A1A;
+    --md-sys-color-on-error: #FFFFFF;
+    --md-sys-color-error-container: #FFDAD6;
+    --md-sys-color-on-error-container: #410002;
+    --md-sys-color-background: #FDFCFF;
+    --md-sys-color-on-background: #1A1C1E;
+    --md-sys-color-surface: #FDFCFF;
+    --md-sys-color-on-surface: #1A1C1E;
+    --md-sys-color-surface-variant: #DFE2EB;
+    --md-sys-color-on-surface-variant: #43474E;
+    --md-sys-color-outline: #73777F;
+    
+    --md-ref-typeface-plain: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* Dark Mode Tokens */
+      --md-sys-color-primary: #9ECAFF;
+      --md-sys-color-on-primary: #003258;
+      --md-sys-color-primary-container: #00497D;
+      --md-sys-color-on-primary-container: #D1E4FF;
+      --md-sys-color-secondary: #BBC7DB;
+      --md-sys-color-secondary-container: #3B4858;
+      --md-sys-color-on-secondary-container: #D7E3F7;
+      --md-sys-color-error: #FFB4AB;
+      --md-sys-color-on-error: #690005;
+      --md-sys-color-error-container: #93000A;
+      --md-sys-color-on-error-container: #FFDAD6;
+      --md-sys-color-background: #1A1C1E;
+      --md-sys-color-on-background: #E2E2E6;
+      --md-sys-color-surface: #1A1C1E;
+      --md-sys-color-on-surface: #E2E2E6;
+      --md-sys-color-surface-variant: #43474E;
+      --md-sys-color-on-surface-variant: #C3C7CF;
+      --md-sys-color-outline: #8D9199;
+    }
+  }
+
   body {
-    font-family: sans-serif;
-    padding: 16px;
+    font-family: var(--md-ref-typeface-plain);
+    background-color: var(--md-sys-color-background);
+    color: var(--md-sys-color-on-background);
+    margin: 0;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    height: 100vh;
+    box-sizing: border-box;
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 400;
+    color: var(--md-sys-color-on-surface);
+  }
+
+  /* Buttons */
+  button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+    height: 40px;
+    border-radius: 20px;
+    border: none;
+    font-family: inherit;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background-color: var(--md-sys-color-primary);
+    color: var(--md-sys-color-on-primary);
+    width: 100%;
+  }
+
+  button:hover {
+    box-shadow: 0 1px 2px rgba(0,0,0,0.3), 0 1px 3px 1px rgba(0,0,0,0.15);
+    opacity: 0.92;
+  }
+
+  button:active {
+    box-shadow: none;
+    opacity: 0.85;
+  }
+
+  button.secondary {
+    background-color: transparent;
+    border: 1px solid var(--md-sys-color-outline);
+    color: var(--md-sys-color-primary);
+  }
+
+  button.secondary:hover {
+    background-color: var(--md-sys-color-primary-container);
+    border-color: var(--md-sys-color-primary-container);
+    color: var(--md-sys-color-on-primary-container);
+  }
+
+  button.danger {
+    background-color: var(--md-sys-color-error);
+    color: var(--md-sys-color-on-error);
+  }
+
+  button.danger:hover {
+    background-color: var(--md-sys-color-error-container);
+    color: var(--md-sys-color-on-error-container);
+  }
+
+  /* Layout */
+  .actions {
     display: flex;
     flex-direction: column;
     gap: 12px;
   }
-  button {
-    padding: 8px 16px;
-    background-color: #18a0fb;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 500;
+
+  .divider {
+    height: 1px;
+    background-color: var(--md-sys-color-outline);
+    opacity: 0.2;
+    margin: 8px 0;
   }
-  button:hover {
-    background-color: #0d86d8;
-  }
-  button.secondary {
-    background-color: transparent;
-    border: 1px solid #e5e5e5;
-    color: #333;
-  }
-  button.secondary:hover {
-    border-color: #333;
-  }
-  .row {
-    display: flex;
-    gap: 8px;
-    align-items: center;
-  }
-  #status {
-    font-size: 12px;
-    color: #666;
-    margin-top: 8px;
-  }
+
+  /* Logs */
   #logs {
-    margin-top: 12px;
-    padding: 8px;
-    background: #F5F5F5;
-    border: 1px solid #E5E5E5;
-    border-radius: 4px;
-    height: 150px;
+    flex: 1;
+    background-color: var(--md-sys-color-surface-variant);
+    color: var(--md-sys-color-on-surface-variant);
+    border-radius: 12px;
+    padding: 16px;
+    font-family: 'Roboto Mono', monospace;
+    font-size: 12px;
+    line-height: 1.5;
     overflow-y: auto;
-    font-family: monospace;
-    font-size: 11px;
     white-space: pre-wrap;
   }
-  .log-info { color: #333; }
-  .log-warn { color: #D97706; }
-  .log-error { color: #DC2626; }
-  input[type="file"] {
-    display: none;
+
+  .log-info { color: var(--md-sys-color-on-surface-variant); }
+  .log-warn { color: #D97706; } /* Keep distinct warning color */
+  .log-error { color: var(--md-sys-color-error); font-weight: bold; }
+
+  #status {
+    font-size: 14px;
+    color: var(--md-sys-color-primary);
+    min-height: 20px;
   }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.6);
+    backdrop-filter: blur(4px);
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 24px;
+  }
+
+  .modal {
+    background-color: var(--md-sys-color-surface);
+    color: var(--md-sys-color-on-surface);
+    padding: 24px;
+    border-radius: 28px;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 4px 8px 3px rgba(0,0,0,0.15), 0 1px 3px rgba(0,0,0,0.3);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .modal h3 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 400;
+  }
+
+  .modal p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 20px;
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .modal-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  input[type="file"] { display: none; }
 </style>
 
 <h2>Variable Manager</h2>
 
-<div class="row">
-  <button id="export">Export Variables to JSON</button>
+<div class="actions">
+  <button id="export">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+      <path d="M12 16L7 11L8.4 9.55L11 12.15V4H13V12.15L15.6 9.55L17 11L12 16ZM6 20C5.45 20 4.97917 19.8042 4.5875 19.4125C4.19583 19.0208 4 18.55 4 18V15H6V18H18V15H20V18C20 18.55 19.8042 19.0208 19.4125 19.4125C19.0208 19.8042 18.55 20 18 20H6Z"/>
+    </svg>
+    Export Variables
+  </button>
+  
+  <button id="importBtn" class="secondary">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+      <path d="M11 16V7.85L8.4 10.45L7 9L12 4L17 9L15.6 10.45L13 7.85V16H11ZM6 20C5.45 20 4.97917 19.8042 4.5875 19.4125C4.19583 19.0208 4 18.55 4 18V15H6V18H18V15H20V18C20 18.55 19.8042 19.0208 19.4125 19.4125C19.0208 19.8042 18.55 20 18 20H6Z"/>
+    </svg>
+    Import Variables
+  </button>
+  <input type="file" id="fileInput" accept=".json" />
 </div>
 
-<div class="row">
-  <button id="importBtn" class="secondary">Import Variables from JSON</button>
-  <input type="file" id="fileInput" accept=".json" />
+<div class="divider"></div>
+
+<div class="actions">
+  <button id="deleteBtn" class="danger">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 8px;">
+      <path d="M7 21C6.45 21 5.97917 20.8042 5.5875 20.4125C5.19583 20.0208 5 19.55 5 19V6H4V4H9V3H15V4H20V6H19V19C19 19.55 18.8042 20.0208 18.4125 20.4125C18.0208 20.8042 17.55 21 17 21H7ZM17 6H7V19H17V6ZM9 17H11V8H9V17ZM13 17H15V8H13V17Z"/>
+    </svg>
+    Delete All Variables
+  </button>
 </div>
 
 <div id="status"></div>
 <div id="logs"></div>
 
+<!-- Modal -->
+<div id="confirmModal" class="modal-overlay">
+  <div class="modal">
+    <h3>Delete All?</h3>
+    <p>This will permanently delete <b>all local collections, modes, and variables</b> in this file. This action cannot be undone.</p>
+    <div class="modal-actions">
+      <button id="backupBtn" class="secondary">Export Backup First</button>
+      <button id="confirmDeleteBtn" class="danger">Delete Forever</button>
+      <button id="cancelBtn" style="background: transparent; color: var(--md-sys-color-primary); box-shadow: none;">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <script>
   const statusDiv = document.getElementById("status");
   const logsDiv = document.getElementById('logs');
+  const modal = document.getElementById('confirmModal');
 
   function setStatus(msg) {
     statusDiv.textContent = msg;
@@ -87,11 +268,11 @@
   }
 
   // Export
-  document.getElementById("export").onclick = () => {
+  function triggerExport() {
     setStatus("Exporting...");
-    logsDiv.innerHTML = ''; // Clear logs
     parent.postMessage({ pluginMessage: { type: "export-variables" } }, "*");
-  };
+  }
+  document.getElementById("export").onclick = triggerExport;
 
   // Import Trigger
   document.getElementById("importBtn").onclick = () => {
@@ -115,39 +296,61 @@
         );
       } catch (err) {
         setStatus("Error parsing JSON");
-        addLog('ERROR', 'Failed to parse JSON file: ' + err.message);
+        addLog('ERROR', "Invalid JSON file");
       }
     };
     reader.readAsText(file);
+    // Reset input
+    e.target.value = '';
+  };
+
+  // Delete Flow
+  document.getElementById("deleteBtn").onclick = () => {
+    modal.style.display = 'flex';
+  };
+
+  document.getElementById("cancelBtn").onclick = () => {
+    modal.style.display = 'none';
+  };
+
+  document.getElementById("backupBtn").onclick = () => {
+    triggerExport();
+    // Don't close modal immediately, let them export.
+    // Or maybe close it? User might want to wait.
+    // Let's keep it open but maybe show status.
+  };
+
+  document.getElementById("confirmDeleteBtn").onclick = () => {
+    modal.style.display = 'none';
+    setStatus("Deleting...");
+    logsDiv.innerHTML = '';
+    parent.postMessage({ pluginMessage: { type: "delete-all" } }, "*");
   };
 
   // Handle messages from the plugin code
   window.onmessage = (event) => {
     const msg = event.data.pluginMessage;
     if (msg.type === "export-success") {
-      downloadJSON(msg.data, "figma-variables.json");
-      setStatus("Export complete!");
-      addLog('INFO', 'Export completed successfully.');
+      const blob = new Blob([JSON.stringify(msg.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "design-tokens.json";
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus("Export successful!");
+      addLog('INFO', "Export completed.");
     } else if (msg.type === "import-success") {
-      setStatus("Import complete!");
-      addLog('INFO', 'Import completed successfully.');
-    } else if (msg.type === "error") {
-      setStatus("Error occurred");
-      addLog('ERROR', msg.message);
+      setStatus("Import successful!");
+      addLog('INFO', "Import completed.");
+    } else if (msg.type === "delete-success") {
+      setStatus("All variables deleted.");
+      addLog('INFO', "All local variables and collections have been deleted.");
     } else if (msg.type === 'log') {
       addLog(msg.level, msg.message);
+    } else if (msg.type === 'error') {
+      setStatus("Error: " + msg.message);
+      addLog('ERROR', msg.message);
     }
   };
-
-  function downloadJSON(data, filename) {
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: "application/json",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
 </script>

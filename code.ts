@@ -80,10 +80,36 @@ figma.ui.onmessage = async (msg) => {
     await handleExport();
   } else if (msg.type === 'import-variables') {
     await handleImport(msg.data);
+  } else if (msg.type === 'delete-all') {
+    await handleDeleteAll();
   } else if (msg.type === 'cancel') {
     figma.closePlugin();
   }
 };
+
+async function handleDeleteAll() {
+  try {
+    log('INFO', 'Starting deletion of all variables...');
+    const collections = await figma.variables.getLocalVariableCollectionsAsync();
+    
+    if (collections.length === 0) {
+        log('INFO', 'No collections found to delete.');
+        figma.ui.postMessage({ type: 'delete-success' });
+        return;
+    }
+
+    for (const collection of collections) {
+        log('INFO', `Deleting collection: ${collection.name}`);
+        collection.remove();
+    }
+
+    log('INFO', 'All collections deleted successfully.');
+    figma.ui.postMessage({ type: 'delete-success' });
+  } catch (err) {
+    log('ERROR', `Failed to delete variables: ${err}`);
+    figma.ui.postMessage({ type: 'error', message: String(err) });
+  }
+}
 
 // --- Export ---
 
