@@ -1,40 +1,108 @@
-Below are the steps to get your plugin running. You can also find instructions at:
+# Isotope - Variable Controller for Figma
 
-  https://www.figma.com/plugin-docs/plugin-quickstart-guide/
+Isotope is a powerful Figma plugin designed to streamline the management of local variables. It allows you to export your variables to various formats, import variables from JSON files, and bulk delete data, making it an essential tool for design system maintainers and developers.
 
-This plugin template uses Typescript and NPM, two standard tools in creating JavaScript applications.
+## Features
 
-First, download Node.js which comes with NPM. This will allow you to install TypeScript and other
-libraries. You can find the download link here:
+- **Export Variables**: Export your local variables to multiple formats:
+  - **Simplified JSON**: A clean, easy-to-read JSON format.
+  - **Full Spec JSON**: Compliant with the W3C Design Tokens Community Group (DTCG) specification.
+  - **CSS Variables**: Ready-to-use CSS custom properties.
+  - **Tailwind Config**: A JavaScript configuration object for Tailwind CSS.
 
-  https://nodejs.org/en/download/
+- **Import Variables**: Bulk create or update variables using a JSON file.
+  - **Upsert Strategy**: Creates new collections/modes/variables if they don't exist, and updates values if they do.
+  - **Alias Support**: Preserves variable references (aliases) during import.
 
-Next, install TypeScript using the command:
+- **Bulk Delete**: Quickly remove all local variables, collections, and modes to start fresh.
 
-  npm install -g typescript
+## Usage
 
-Finally, in the directory of your plugin, get the latest type definitions for the plugin API by running:
+### Exporting Variables
 
-  npm install --save-dev @figma/plugin-typings
+1. Open the Isotope plugin.
+2. In the **Export** section, select your desired format (Simplified, Full Spec, CSS, or Tailwind).
+3. Click **Export Variables**.
+4. Save the generated file to your computer.
 
-If you are familiar with JavaScript, TypeScript will look very familiar. In fact, valid JavaScript code
-is already valid Typescript code.
+### Importing Variables
 
-TypeScript adds type annotations to variables. This allows code editors such as Visual Studio Code
-to provide information about the Figma API while you are writing code, as well as help catch bugs
-you previously didn't notice.
+1. Open the Isotope plugin.
+2. In the **Import** section, click **Import Variables**.
+3. Select a valid JSON file containing your variable definitions.
+4. The plugin will process the file and report progress.
 
-For more information, visit https://www.typescriptlang.org/
+### Deleting Data
 
-Using TypeScript requires a compiler to convert TypeScript (code.ts) into JavaScript (code.js)
-for the browser to run.
+1. Click the **Delete all data** link in the footer.
+2. Confirm the action in the modal dialog.
+3. **Warning**: This action is irreversible and will remove ALL local variables in the file.
 
-We recommend writing TypeScript code using Visual Studio code:
+## JSON Format Specification
 
-1. Download Visual Studio Code if you haven't already: https://code.visualstudio.com/.
-2. Open this directory in Visual Studio Code.
-3. Compile TypeScript to JavaScript: Run the "Terminal > Run Build Task..." menu item,
-    then select "npm: watch". You will have to do this again every time
-    you reopen Visual Studio Code.
+Isotope supports a hierarchical JSON structure compatible with the W3C Design Tokens format.
 
-That's it! Visual Studio Code will regenerate the JavaScript file every time you save.
+### Structure
+
+```json
+{
+  "Collection Name": {
+    "Mode Name": {
+      "Group": {
+        "Variable": { 
+          "$type": "color", 
+          "$value": "#FF0000" 
+        }
+      }
+    }
+  }
+}
+```
+
+### Supported Types
+
+- **color**: Hex codes (e.g., `#FF0000`)
+- **number**: Numeric values (e.g., `16`, `0.5`)
+- **boolean**: `true` or `false`
+- **string**: Text values
+
+### Aliases
+
+To reference another variable, use the syntax `{Collection.Group.Variable}`.
+Example: `"$value": "{Brand.Color.Primary}"`
+
+## Development
+
+This plugin is built with TypeScript and NPM.
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/en/download/)
+- NPM (comes with Node.js)
+
+### Setup
+
+1. Clone the repository.
+2. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+### Building
+
+To compile the TypeScript code to JavaScript:
+
+```bash
+npm run build
+```
+
+To watch for changes during development:
+
+```bash
+npm run watch
+```
+
+## License
+
+MIT

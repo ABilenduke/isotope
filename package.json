@@ -11,6 +11,10 @@
   },
   "author": "Andrew Bilenduke",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ABilenduke/isotope.git"
+  },
   "devDependencies": {
     "@figma/eslint-plugin-figma-plugins": "*",
     "@figma/plugin-typings": "^1.121.0",
